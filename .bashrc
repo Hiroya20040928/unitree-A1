@@ -1,0 +1,2 @@
+alias fixnet='sudo ip addr flush dev eth0 && sudo ip link set eth0 down && sudo ip link set eth0 up && sudo ip addr add 192.168.11.100/24 dev eth0 && sudo ip addr add 192.168.123.162/24 dev eth0 && sleep 3 && ping -c 2 192.168.11.1 && ping -c 2 192.168.123.161'
+alias fixnet='sudo ip addr flush dev eth0 && sudo ip link set eth0 down && sudo ip link set eth0 up && sudo ip addr add 192.168.11.100/24 dev eth0 && sudo ip addr add 192.168.123.162/24 dev eth0 && sleep 3 && ping -c 2 192.168.11.1 && ping -c 2 192.168.123.161'

@@ -1,0 +1,26 @@
+<launch>
+  <arg name="ip_address" default="192.168.11.1" />
+  <arg name="start_slamware" default="true" />
+  <arg name="start_rviz" default="false" />
+  <arg name="rviz_config" default="$(find slam_planner)/cfg/slam_planner_online.rviz" />
+
+  <include if="$(arg start_slamware)" file="$(find slam_planner)/launch/slam_rplidar_start.launch">
+    <arg name="ip_address" value="$(arg ip_address)" />
+  </include>
+
+  <node pkg="slam_planner" type="base_controller_node" name="base_controller_node" output="screen" />
+
+  <node pkg="slam_planner" type="wander_obstacle_avoidance.py" name="wander_obstacle_avoidance" output="screen">
+    <param name="scan_topic" value="/scan" />
+    <param name="cmd_vel_topic" value="/cmd_vel" />
+    <param name="control_rate" value="10.0" />
+    <param name="linear_speed" value="0.10" />
+    <param name="angular_speed" value="0.50" />
+    <param name="escape_angular_speed" value="0.80" />
+    <param name="forward_clearance" value="0.40" />
+    <param name="side_clearance" value="0.32" />
+    <param name="emergency_clearance" value="0.30" />
+  </node>
+
+  <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="wander_obstacle_avoidance_rviz" args="-d $(arg rviz_config)" />
+</launch>

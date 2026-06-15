@@ -1,0 +1,9 @@
+-- Logs begin at Thu 2026-06-11 21:19:30 JST, end at Thu 2026-06-11 21:21:19 JST. --
+6月 11 21:19:32 nx systemd[1]: Starting Raise network interfaces...
+6月 11 21:19:32 nx sh[4564]: /etc/network/interfaces:26: unknown or no address type and no inherits keyword specified
+6月 11 21:19:32 nx sh[4564]: ifquery: couldn't read interfaces file "/etc/network/interfaces"
+6月 11 21:19:32 nx ifup[4602]: /etc/network/interfaces:26: unknown or no address type and no inherits keyword specified
+6月 11 21:19:32 nx ifup[4602]: /sbin/ifup: couldn't read interfaces file "/etc/network/interfaces"
+6月 11 21:19:32 nx systemd[1]: [0;1;39m[0;1;31m[0;1;39mnetworking.service: Main process exited, code=exited, status=1/FAILURE[0m
+6月 11 21:19:32 nx systemd[1]: [0;1;39m[0;1;31m[0;1;39mnetworking.service: Failed with result 'exit-code'.[0m
+6月 11 21:19:32 nx systemd[1]: [0;1;31m[0;1;39m[0;1;31mFailed to start Raise network interfaces.[0m

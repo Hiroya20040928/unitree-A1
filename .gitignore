@@ -1,0 +1,75 @@
+# secrets / auth
+.ssh/
+.gnupg/
+.npmrc
+.git-credentials
+.netrc
+.Xauthority
+.ICEauthority
+
+# user/session/cache
+.cache/
+.ccache/
+.dbus/
+.config/
+.local/
+.npm/
+.nvm/
+.nv/
+.nx/
+.pki/
+.qt/
+.ros/
+.rviz/
+.subversion/
+.vim/
+.viminfo
+.lesshsQ
+.sudo_as_admin_successful
+
+# build / generated
+build/
+devel/
+install/
+log/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# media / logs / large data
+*.bag
+*.mp4
+*.avi
+*.mkv
+*.bin
+*.log
+
+# compiled binaries
+capture_test
+realsense_a1_control
+realsense_perfect_choki
+vision_simulator
+
+# accidental empty ROS/YAML fragments
+backward:
+classic:
+forward:
+frame_id:
+key_points:
+nsecs:
+options:
+orientation:
+pose:
+position:
+secs:
+seq:
+stamp:
+w:
+x:
+y:
+z:
+num_bss=1
+hapd_deinit
+ENABLED
+DISABLED

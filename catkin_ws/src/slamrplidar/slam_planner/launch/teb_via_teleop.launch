@@ -1,0 +1,33 @@
+<launch>
+  <arg name="ip_address" default="192.168.11.1" />
+  <arg name="start_rviz" default="true" />
+  <arg name="local_planner" default="dwa_local_planner/DWAPlannerROS" />
+
+  <include file="$(find slamware_ros_sdk)/launch/slamware_ros_sdk_server_node.launch">
+    <arg name="move_base_goal_topic" value="disable" />
+    <arg name="ip_address" value="$(arg ip_address)" />
+  </include>
+
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <rosparam file="$(find slamware_ros_sdk)/cfg/diff_drive/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find slamware_ros_sdk)/cfg/diff_drive/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find slamware_ros_sdk)/cfg/diff_drive/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find slamware_ros_sdk)/cfg/diff_drive/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find slam_planner)/params/teb_via_teleop_params.yaml" command="load" />
+    <rosparam file="$(find slam_planner)/params/dwa_local_planner_params.yaml" command="load" />
+
+    <param name="base_global_planner" value="global_planner/GlobalPlanner" />
+    <param name="planner_frequency" value="2.0" />
+    <param name="planner_patience" value="3.0" />
+
+    <param name="base_local_planner" value="$(arg local_planner)" />
+    <param name="controller_frequency" value="8.0" />
+    <param name="controller_patience" value="6.0" />
+  </node>
+
+  <node pkg="slam_planner" type="base_controller_node" name="base_controller_node" output="screen" />
+  <node pkg="slam_planner" type="teb_via_teleop_node" name="teb_via_teleop" output="screen" />
+
+  <node if="$(arg start_rviz)" name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find slamware_ros_sdk)/rviz/slamware_ros_sdk_teb.rviz" />
+</launch>
