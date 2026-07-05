@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set +e
+
+WS="$HOME/legged_ws"
+
+source /opt/ros/melodic/setup.bash >/dev/null 2>&1 || true
+source "$WS/devel/setup.bash" >/dev/null 2>&1 || true
+
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+echo "[A1ESTOP] stopping legged_controller..."
+rosservice call /controller_manager/switch_controller "start_controllers: []
+stop_controllers:
+- 'controllers/legged_controller'
+strictness: 2
+start_asap: false
+timeout: 0.0" >/dev/null 2>&1 || true
+
+echo "[A1ESTOP] killing ROS/A1 nodes..."
+pkill -f "legged_robot_gait_command" >/dev/null 2>&1 || true
+pkill -f "legged_target_trajectories_publisher" >/dev/null 2>&1 || true
+pkill -f "legged_unitree_hw" >/dev/null 2>&1 || true
+pkill -f "legged_robot_target" >/dev/null 2>&1 || true
+pkill -f "roslaunch.*legged_unitree_hw" >/dev/null 2>&1 || true
+pkill -f "rostopic echo" >/dev/null 2>&1 || true
+
+echo "[A1ESTOP] done."

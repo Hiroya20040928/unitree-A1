@@ -1,0 +1,53 @@
+<launch>
+    <include file="$(find slam_planner)/launch/slam_rplidar_start.launch" />
+
+    <!-- plannerの出力を直接A1へ入れず，まず /cmd_vel_raw へ逃がす -->
+    <node pkg="slam_planner"
+          type="slam_planner_node"
+          respawn="false"
+          name="slam_planner_node"
+          output="screen"
+          clear_params="true">
+
+        <remap from="/cmd_vel" to="/cmd_vel_raw" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="global_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="local_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/local_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/global_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/base_local_planner_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/nav_obstacles_params.yaml"
+                  command="load" />
+    </node>
+
+    <!-- A1の非対称重量による低速左流れを補正する -->
+    <node pkg="slam_planner"
+          type="a1_cmd_vel_bias.py"
+          name="a1_cmd_vel_bias"
+          output="screen">
+        <param name="v_ref" value="1.0" />
+        <param name="k_bias" value="0.14" />
+        <param name="min_vx_for_bias" value="0.05" />
+        <param name="max_abs_bias" value="0.14" />
+        <param name="max_abs_vx" value="0.95" />
+        <param name="max_abs_wz" value="0.35" />
+        <param name="watchdog_timeout" value="0.35" />
+    </node>
+
+    <node pkg="slam_planner"
+          type="base_controller_node"
+          name="base_controller_node"
+          output="screen" />
+</launch>

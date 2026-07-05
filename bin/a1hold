@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set +e
+
+WS="$HOME/legged_ws"
+
+source /opt/ros/melodic/setup.bash >/dev/null 2>&1 || true
+source "$WS/devel/setup.bash" >/dev/null 2>&1 || true
+
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+echo "[A1HOLD] stopping legged_controller only..."
+rosservice call /controller_manager/switch_controller "start_controllers: []
+stop_controllers:
+- 'controllers/legged_controller'
+strictness: 2
+start_asap: false
+timeout: 0.0" >/dev/null 2>&1 || true
+
+echo "[A1HOLD] done."
+echo "[A1HOLD] legged_unitree_hw is still running."
+echo "[A1HOLD] Use a1estop only when the robot is physically safe/supported."

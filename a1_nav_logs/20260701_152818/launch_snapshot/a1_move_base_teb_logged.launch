@@ -1,0 +1,92 @@
+<launch>
+    <arg name="log_dir" default="/home/unitree/a1_nav_logs/latest" />
+
+    <include file="$(find slam_planner)/launch/slam_rplidar_start.launch" />
+
+    <node pkg="move_base"
+          type="move_base"
+          name="move_base"
+          output="screen"
+          clear_params="true">
+
+        <remap from="cmd_vel" to="/cmd_vel_nav" />
+
+        <rosparam file="$(find slam_planner)/params/move_base_teb_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="global_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="local_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/global_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/local_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/teb_a1_params.yaml"
+                  command="load" />
+    </node>
+
+    <node pkg="slam_planner"
+          type="a1_lateral_guard_node.py"
+          name="a1_lateral_guard_node"
+          output="screen">
+
+        <param name="max_vx" value="0.75" />
+        <param name="max_vy" value="0.22" />
+        <param name="max_wz" value="0.24" />
+
+        <param name="min_walk_vx" value="0.45" />
+        <param name="speed_lift_threshold" value="0.05" />
+
+        <param name="accel_vx" value="0.30" />
+        <param name="accel_vy" value="0.35" />
+        <param name="accel_wz" value="0.25" />
+        <param name="decel_vx" value="0.90" />
+
+        <param name="k_lat" value="0.85" />
+        <param name="max_lat_corr" value="0.20" />
+        <param name="lat_sign" value="-1.0" />
+
+        <param name="straight_wz_threshold" value="0.06" />
+        <param name="enable_lateral_correction" value="true" />
+
+        <param name="front_stop_dist" value="0.65" />
+        <param name="front_slow_dist" value="1.00" />
+        <param name="front_sector_deg" value="35.0" />
+
+        <param name="goal_stop_radius" value="0.45" />
+        <param name="goal_latch_radius" value="0.38" />
+
+        <param name="cmd_timeout" value="0.35" />
+    </node>
+
+    <node pkg="slam_planner"
+          type="base_controller_node"
+          name="base_controller_node"
+          output="screen" />
+
+    <node pkg="rosbag"
+          type="record"
+          name="a1_nav_rosbag"
+          output="screen"
+          args="-O $(arg log_dir)/a1_nav.bag
+                /tf
+                /tf_static
+                /map
+                /scan
+                /odom
+                /move_base_simple/goal
+                /move_base/GlobalPlanner/plan
+                /move_base/TebLocalPlannerROS/local_plan
+                /move_base/local_costmap/costmap
+                /move_base/global_costmap/costmap
+                /cmd_vel_nav
+                /cmd_vel
+                /a1_nav_debug" />
+</launch>

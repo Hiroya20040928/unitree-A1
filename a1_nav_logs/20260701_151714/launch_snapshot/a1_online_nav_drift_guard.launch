@@ -1,0 +1,68 @@
+<launch>
+    <include file="$(find slam_planner)/launch/slam_rplidar_start.launch" />
+
+    <node pkg="slam_planner"
+          type="slam_planner_node"
+          respawn="false"
+          name="slam_planner_node"
+          output="screen"
+          clear_params="true">
+
+        <remap from="/cmd_vel" to="/cmd_vel_raw" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="global_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/costmap_common_params.yaml"
+                  command="load"
+                  ns="local_costmap" />
+
+        <rosparam file="$(find slam_planner)/params/local_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/global_costmap_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/base_local_planner_params.yaml"
+                  command="load" />
+
+        <rosparam file="$(find slam_planner)/params/nav_obstacles_params.yaml"
+                  command="load" />
+    </node>
+
+    <node pkg="slam_planner"
+          type="a1_drift_guard_node.py"
+          name="a1_drift_guard_node"
+          output="screen">
+
+        <param name="max_vx" value="0.85" />
+        <param name="max_wz" value="0.24" />
+
+        <param name="min_useful_vx" value="0.55" />
+        <param name="enable_speed_lift" value="true" />
+
+        <param name="accel_vx" value="0.28" />
+        <param name="decel_vx" value="0.90" />
+        <param name="accel_wz" value="0.26" />
+
+        <param name="straight_wz_threshold" value="0.06" />
+        <param name="k_lat" value="0.75" />
+        <param name="k_yaw" value="0.45" />
+        <param name="max_drift_corr" value="0.12" />
+
+        <param name="v_ref" value="1.0" />
+        <param name="k_ff" value="0.015" />
+        <param name="max_ff" value="0.02" />
+
+        <param name="goal_stop_radius" value="0.45" />
+        <param name="goal_latch_radius" value="0.38" />
+
+        <param name="cmd_timeout" value="0.35" />
+    </node>
+
+    <node pkg="slam_planner"
+          type="base_controller_node"
+          name="base_controller_node"
+          output="screen" />
+</launch>

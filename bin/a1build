@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+cd "$HOME/legged_ws"
+
+source /opt/ros/melodic/setup.bash
+
+echo "[A1BUILD] building legged_unitree_hw and legged_controllers..."
+catkin build legged_unitree_hw legged_controllers -j1
+
+source "$HOME/legged_ws/devel/setup.bash"
+
+echo "[A1BUILD] checking safe-hold string..."
+strings "$HOME/legged_ws/devel/lib/legged_unitree_hw/legged_unitree_hw_3_3_1" 2>/dev/null | grep -E "Latched startup|safe hold|safe-hold" || true
+strings "$HOME/legged_ws/devel/lib/legged_unitree_hw/legged_unitree_hw" 2>/dev/null | grep -E "Latched startup|safe hold|safe-hold" || true
+
+echo "[A1BUILD] done."

@@ -1,0 +1,5 @@
+OK
+mode=stop
+xerr=0.0000
+area=0.0000
+route_active=0

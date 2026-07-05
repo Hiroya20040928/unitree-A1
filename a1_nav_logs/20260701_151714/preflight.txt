@@ -1,0 +1,31 @@
+===== date =====
+2026年 07月 01日 星期三 15:17:28 JST
+===== ip addr =====
+3: eth0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    link/ether 48:b0:2d:2f:6c:a9 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.11.100/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 192.168.123.162/24 scope global eth0
+       valid_lft forever preferred_lft forever
+===== route =====
+192.168.11.1 dev eth0 src 192.168.11.100 uid 1000 
+    cache 
+192.168.123.161 dev eth0 src 192.168.123.162 uid 1000 
+    cache 
+===== ping slamware =====
+PING 192.168.11.1 (192.168.11.1) 56(84) bytes of data.
+From 192.168.11.100 icmp_seq=1 Destination Host Unreachable
+From 192.168.11.100 icmp_seq=2 Destination Host Unreachable
+
+--- 192.168.11.1 ping statistics ---
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1005ms
+pipe 2
+===== slamware tcp =====
+===== ping atom =====
+PING 192.168.123.161 (192.168.123.161) 56(84) bytes of data.
+64 bytes from 192.168.123.161: icmp_seq=1 ttl=64 time=0.582 ms
+64 bytes from 192.168.123.161: icmp_seq=2 ttl=64 time=0.438 ms
+
+--- 192.168.123.161 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1010ms
+rtt min/avg/max/mdev = 0.438/0.510/0.582/0.072 ms

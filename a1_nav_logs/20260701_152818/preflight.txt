@@ -1,0 +1,42 @@
+===== date =====
+2026年 07月 01日 星期三 15:28:50 JST
+===== ip addr =====
+3: eth0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    link/ether 48:b0:2d:2f:6c:a9 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.11.100/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 192.168.123.162/24 scope global eth0
+       valid_lft forever preferred_lft forever
+===== route =====
+192.168.11.1 dev eth0 src 192.168.11.100 uid 1000 
+    cache 
+192.168.123.161 dev eth0 src 192.168.123.162 uid 1000 
+    cache 
+===== ping slamware =====
+PING 192.168.11.1 (192.168.11.1) 56(84) bytes of data.
+From 192.168.11.100 icmp_seq=1 Destination Host Unreachable
+From 192.168.11.100 icmp_seq=2 Destination Host Unreachable
+
+--- 192.168.11.1 ping statistics ---
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1011ms
+pipe 2
+===== slamware tcp =====
+===== ping atom =====
+PING 192.168.123.161 (192.168.123.161) 56(84) bytes of data.
+64 bytes from 192.168.123.161: icmp_seq=1 ttl=64 time=0.595 ms
+64 bytes from 192.168.123.161: icmp_seq=2 ttl=64 time=0.367 ms
+
+--- 192.168.123.161 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1004ms
+rtt min/avg/max/mdev = 0.367/0.481/0.595/0.114 ms
+===== map files =====
+total 68K
+-rw-rw-r-- 1 unitree unitree 62K 7月   1 15:27 a1_lab.pgm
+-rw-rw-r-- 1 unitree unitree 154 7月   1 15:27 a1_lab.yaml
+image: /home/unitree/a1_maps/a1_lab.pgm
+resolution: 0.050000
+origin: [-6.200000, -7.750000, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+

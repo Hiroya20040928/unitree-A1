@@ -1,0 +1,13 @@
+[01m[K/home/unitree/legged_ws/src/hpp-fcl/src/shape/convex.cpp:[m[K In static member function ‘[01m[Kstatic hpp::fcl::ConvexBase* hpp::fcl::ConvexBase::convexHull(const Vec3f*, int, bool, const char*)[m[K’:
+[01m[K/home/unitree/legged_ws/src/hpp-fcl/src/shape/convex.cpp:24:49:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Kpts[m[K’ [[01;35m[K-Wunused-parameter[m[K]
+ ConvexBase* ConvexBase::convexHull(const Vec3f* [01;35m[Kpts[m[K, int num_points,
+                                                 [01;35m[K^~~[m[K
+[01m[K/home/unitree/legged_ws/src/hpp-fcl/src/shape/convex.cpp:24:58:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Knum_points[m[K’ [[01;35m[K-Wunused-parameter[m[K]
+ ConvexBase* ConvexBase::convexHull(const Vec3f* pts, int [01;35m[Knum_points[m[K,
+                                                          [01;35m[K^~~~~~~~~~[m[K
+[01m[K/home/unitree/legged_ws/src/hpp-fcl/src/shape/convex.cpp:25:10:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[KkeepTriangles[m[K’ [[01;35m[K-Wunused-parameter[m[K]
+     bool [01;35m[KkeepTriangles[m[K, const char* qhullCommand)
+          [01;35m[K^~~~~~~~~~~~~[m[K
+[01m[K/home/unitree/legged_ws/src/hpp-fcl/src/shape/convex.cpp:25:37:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[KqhullCommand[m[K’ [[01;35m[K-Wunused-parameter[m[K]
+     bool keepTriangles, const char* [01;35m[KqhullCommand[m[K)
+                                     [01;35m[K^~~~~~~~~~~~[m[K

@@ -1,0 +1,6 @@
+3: eth0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    link/ether 48:b0:2d:2f:6c:a9 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.11.100/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 192.168.123.162/24 scope global eth0
+       valid_lft forever preferred_lft forever

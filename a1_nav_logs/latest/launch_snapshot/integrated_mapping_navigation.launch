@@ -1,0 +1,25 @@
+<launch>
+  <arg name="ip_address" default="192.168.11.1" />
+  <arg name="map_bundle" default="" />
+  <arg name="save_map_name" default="" />
+  <arg name="bundle_root" default="$(env HOME)/catkin_ws/src/slamrplidar/slam_planner/maps/generated" />
+  <arg name="rviz_config" default="$(find slam_planner)/cfg/slam_planner_online.rviz" />
+  <arg name="start_fresh_map" default="true" />
+
+  <include file="$(find slam_planner)/launch/slam_rplidar_start.launch">
+    <arg name="ip_address" value="$(arg ip_address)" />
+  </include>
+
+  <node
+    pkg="slam_planner"
+    type="integrated_mapping_navigation_manager.py"
+    name="integrated_mapping_navigation"
+    output="screen">
+    <param name="map_bundle" value="$(arg map_bundle)" />
+    <param name="save_map_name" value="$(arg save_map_name)" />
+    <param name="bundle_root" value="$(arg bundle_root)" />
+    <param name="start_fresh_map" value="$(arg start_fresh_map)" />
+  </node>
+
+  <node pkg="rviz" type="rviz" name="integrated_mapping_navigation_rviz" args="-d $(arg rviz_config)" />
+</launch>

@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+set +e
+
+A1_WS="$HOME/legged_ws"
+A1_LOG_ROOT="$HOME/a1_logs"
+
+a1_env() {
+  if [ -f /opt/ros/melodic/setup.bash ]; then
+    source /opt/ros/melodic/setup.bash
+  fi
+
+  if [ -f "$A1_WS/devel/setup.bash" ]; then
+    source "$A1_WS/devel/setup.bash"
+  fi
+
+  export ROBOT_TYPE=a1
+  export ROS_MASTER_URI=http://127.0.0.1:11311
+  export ROS_IP=127.0.0.1
+  unset ROS_HOSTNAME
+
+  if [ -d "$HOME/.local/cmake-3.16.9/bin" ]; then
+    export PATH="$HOME/.local/cmake-3.16.9/bin:$PATH"
+  fi
+
+  export PATH="$HOME/bin:$PATH"
+}
+
+netfix() {
+  echo "[A1REPO] Network preparation only."
+  sudo -n /usr/local/sbin/a1-netfix || sudo /usr/local/sbin/a1-netfix
+}
+
+prep() {
+  a1_env
+  mkdir -p "$A1_LOG_ROOT"
+
+  echo "============================================================"
+  echo "[A1REPO] PREPARE ENVIRONMENT ONLY"
+  echo "============================================================"
+  echo "[A1REPO] This command does NOT start legged_unitree_hw."
+  echo "[A1REPO] This command does NOT load controllers."
+  echo "[A1REPO] This command does NOT send stance."
+  echo ""
+
+  echo "[1/6] Network: external internet + A1 eth0"
+  netfix
+
+  echo ""
+  echo "[2/6] ROS environment"
+  echo "ROBOT_TYPE=$ROBOT_TYPE"
+  echo "ROS_MASTER_URI=$ROS_MASTER_URI"
+  echo "ROS_IP=$ROS_IP"
+  echo "ROS_HOSTNAME=${ROS_HOSTNAME:-}"
+
+  echo ""
+  echo "[3/6] Workspace check"
+  if [ ! -d "$A1_WS" ]; then
+    echo "[NG] Workspace not found: $A1_WS"
+    exit 1
+  fi
+
+  cd "$A1_WS" || exit 1
+  echo "[OK] Workspace: $A1_WS"
+
+  if [ -f "$A1_WS/devel/setup.bash" ]; then
+    echo "[OK] devel/setup.bash exists"
+  else
+    echo "[NG] devel/setup.bash missing. Build is required."
+    exit 1
+  fi
+
+  echo ""
+  echo "[4/6] ROS package check"
+  rospack find legged_unitree_hw >/dev/null 2>&1
+  if [ "$?" = "0" ]; then
+    echo "[OK] legged_unitree_hw: $(rospack find legged_unitree_hw)"
+  else
+    echo "[NG] legged_unitree_hw not found"
+  fi
+
+  rospack find legged_controllers >/dev/null 2>&1
+  if [ "$?" = "0" ]; then
+    echo "[OK] legged_controllers: $(rospack find legged_controllers)"
+  else
+    echo "[NG] legged_controllers not found"
+  fi
+
+  rospack find ocs2_legged_robot_ros >/dev/null 2>&1
+  if [ "$?" = "0" ]; then
+    echo "[OK] ocs2_legged_robot_ros: $(rospack find ocs2_legged_robot_ros)"
+  else
+    echo "[NG] ocs2_legged_robot_ros not found"
+  fi
+
+  echo ""
+  echo "[5/6] Executable check"
+  for f in \
+    "$A1_WS/devel/lib/legged_controllers/legged_target_trajectories_publisher" \
+    "$A1_WS/devel/lib/ocs2_legged_robot_ros/legged_robot_gait_command"
+  do
+    if [ -x "$f" ]; then
+      echo "[OK] $f"
+    else
+      echo "[NG] $f"
+    fi
+  done
+
+  echo ""
+  echo "[6/6] A1 low-level ping"
+  ping -c 1 -W 1 192.168.123.10 >/dev/null 2>&1
+  if [ "$?" = "0" ]; then
+    echo "[OK] A1 low-level controller reachable: 192.168.123.10"
+  else
+    echo "[WARN] A1 low-level controller is not reachable."
+    echo "       This is OK if A1 is powered off or Ethernet is disconnected."
+  fi
+
+  echo ""
+  echo "============================================================"
+  echo "[A1REPO] ENVIRONMENT READY"
+  echo "============================================================"
+  echo "Nothing has been launched."
+  echo "Next manual command examples:"
+  echo "  a1manual"
+  echo "  a1status"
+  echo "============================================================"
+}
+
+status() {
+  a1_env
+
+  echo "===== network ====="
+  ip -4 addr show eth0 | grep -E "state|inet " || true
+  ip route | sed -n '1,10p'
+
+  echo ""
+  echo "===== internet / DNS ====="
+  ping -c 1 -W 1 1.1.1.1 || true
+  getent hosts ports.ubuntu.com || true
+  getent hosts packages.ros.org || true
+
+  echo ""
+  echo "===== A1 ping ====="
+  ping -c 1 -W 1 192.168.123.10 || true
+
+  echo ""
+  echo "===== ROS env ====="
+  echo "ROBOT_TYPE=$ROBOT_TYPE"
+  echo "ROS_MASTER_URI=$ROS_MASTER_URI"
+  echo "ROS_IP=$ROS_IP"
+  echo "ROS_HOSTNAME=${ROS_HOSTNAME:-}"
+
+  echo ""
+  echo "===== workspace ====="
+  echo "A1_WS=$A1_WS"
+  [ -f "$A1_WS/devel/setup.bash" ] && echo "[OK] devel/setup.bash" || echo "[NG] devel/setup.bash"
+
+  echo ""
+  echo "===== ROS master / nodes if running ====="
+  rosnode list || true
+
+  echo ""
+  echo "===== controller_manager if running ====="
+  rosservice call /controller_manager/list_controllers || true
+}
+
+manual() {
+  cat <<'MANUAL'
+============================================================
+Manual execution sequence after a1prep
+============================================================
+
+Premise:
+  - A1 is powered on.
+  - A1 has been put into standing posture by the remote controller.
+  - Run a1prep first.
+
+Terminal 1: hardware
+------------------------------------------------------------
+cd ~/legged_ws
+source /opt/ros/melodic/setup.bash
+source devel/setup.bash
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+roslaunch --screen legged_unitree_hw legged_unitree_hw.launch
+
+
+Terminal 2: parameters and controllers
+------------------------------------------------------------
+cd ~/legged_ws
+source /opt/ros/melodic/setup.bash
+source devel/setup.bash
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+rosparam load $(rospack find legged_controllers)/config/controllers.yaml
+
+rosparam set /urdfFile /tmp/legged_control/a1.urdf
+rosparam set /taskFile "$(rospack find legged_controllers)/config/a1/task.info"
+rosparam set /referenceFile "$(rospack find legged_controllers)/config/a1/reference.info"
+rosparam set /gaitCommandFile "$(rospack find legged_controllers)/config/a1/gait.info"
+
+rosservice call /controller_manager/load_controller "name: 'controllers/joint_state_controller'"
+
+rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/joint_state_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+rostopic echo -n 1 /joint_states
+
+rosservice call /controller_manager/load_controller "name: 'controllers/legged_controller'"
+
+
+Terminal 3: target publisher
+------------------------------------------------------------
+cd ~/legged_ws
+source /opt/ros/melodic/setup.bash
+source devel/setup.bash
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+rosrun legged_controllers legged_target_trajectories_publisher
+
+
+Terminal 4: gait command
+------------------------------------------------------------
+cd ~/legged_ws
+source /opt/ros/melodic/setup.bash
+source devel/setup.bash
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+rosrun --prefix 'stdbuf -o0 -e0' ocs2_legged_robot_ros legged_robot_gait_command __name:=legged_robot_gait_command
+
+
+Terminal 2: final start when ready
+------------------------------------------------------------
+rosnode list
+
+rostopic info /legged_robot_mpc_mode_schedule
+rostopic info /legged_robot_mpc_target
+rostopic info /legged_robot_mpc_observation
+
+rostopic echo -n 1 /joy
+
+rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/legged_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+rosservice call /controller_manager/list_controllers
+
+
+Gait terminal:
+------------------------------------------------------------
+stance
+
+============================================================
+MANUAL
+}
+
+clean() {
+  a1_env
+  echo "[A1REPO] clean stale ROS/A1 processes only."
+
+  timeout 3 rosservice call /controller_manager/switch_controller "{start_controllers: [], stop_controllers: ['controllers/legged_controller'], strictness: 2, start_asap: false, timeout: 0.0}" >/dev/null 2>&1 || true
+
+  pkill -f "legged_robot_gait_command" || true
+  pkill -f "legged_target_trajectories_publisher" || true
+  pkill -f "legged_unitree_hw" || true
+  pkill -f "legged_robot_target" || true
+  pkill -f "roslaunch.*legged_unitree_hw" || true
+  pkill -f "controller_loader" || true
+  pkill -f "rosmaster" || true
+  pkill -f "rosout" || true
+
+  echo "[A1REPO] clean done."
+}
+
+case "$1" in
+  prep|prepare|"")
+    prep
+    ;;
+  netfix)
+    netfix
+    ;;
+  status)
+    status
+    ;;
+  manual)
+    manual
+    ;;
+  clean)
+    clean
+    ;;
+  *)
+    echo "Usage:"
+    echo "  a1repo prep      # environment only. No launch."
+    echo "  a1repo netfix    # network only."
+    echo "  a1repo status    # status only."
+    echo "  a1repo manual    # print manual launch sequence."
+    echo "  a1repo clean     # stop stale ROS/A1 processes."
+    exit 1
+    ;;
+esac

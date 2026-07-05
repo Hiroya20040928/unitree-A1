@@ -1,0 +1,8 @@
+[01m[K/home/unitree/legged_ws/src/ocs2/ocs2_robotic_examples/ocs2_legged_robot_ros/src/visualization/LeggedRobotVisualizer.cpp:[m[K In member function ‘[01m[Kvoid ocs2::legged_robot::LeggedRobotVisualizer::publishJointTransforms(ros::Time, const vector_t&) const[m[K’:
+[01m[K/home/unitree/legged_ws/src/ocs2/ocs2_robotic_examples/ocs2_legged_robot_ros/src/visualization/LeggedRobotVisualizer.cpp:147:73:[m[K [01;31m[Kerror: [m[Kno matching function for call to ‘[01m[Krobot_state_publisher::RobotStatePublisher::publishTransforms(std::map<std::__cxx11::basic_string<char>, double>&, ros::Time&)[m[K’
+     robotStatePublisherPtr_->publishTransforms(jointPositions, timeStamp[01;31m[K)[m[K;
+                                                                         [01;31m[K^[m[K
+compilation terminated due to -Wfatal-errors.
+make[2]: *** [CMakeFiles/ocs2_legged_robot_ros.dir/src/visualization/LeggedRobotVisualizer.cpp.o] Error 1
+make[1]: *** [CMakeFiles/ocs2_legged_robot_ros.dir/all] Error 2
+make: *** [all] Error 2

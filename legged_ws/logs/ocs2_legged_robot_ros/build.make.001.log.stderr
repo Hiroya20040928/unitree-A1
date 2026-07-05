@@ -1,0 +1,8 @@
+[01m[K/home/unitree/legged_ws/src/ocs2/ocs2_robotic_examples/ocs2_legged_robot_ros/src/visualization/LeggedRobotVisualizer.cpp:[m[K In member function ‘[01m[Kvoid ocs2::legged_robot::LeggedRobotVisualizer::launchVisualizerNode(ros::NodeHandle&)[m[K’:
+[01m[K/home/unitree/legged_ws/src/ocs2/ocs2_robotic_examples/ocs2_legged_robot_ros/src/visualization/LeggedRobotVisualizer.cpp:94:53:[m[K [01;31m[Kerror: [m[Kno matching function for call to ‘[01m[Krobot_state_publisher::RobotStatePublisher::publishFixedTransforms()[m[K’
+     robotStatePublisherPtr_->publishFixedTransforms([01;31m[K)[m[K;
+                                                     [01;31m[K^[m[K
+compilation terminated due to -Wfatal-errors.
+make[2]: *** [CMakeFiles/ocs2_legged_robot_ros.dir/src/visualization/LeggedRobotVisualizer.cpp.o] Error 1
+make[1]: *** [CMakeFiles/ocs2_legged_robot_ros.dir/all] Error 2
+make: *** [all] Error 2

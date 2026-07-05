@@ -1,0 +1,11 @@
+OK
+server=a1_follow_lowlatency_depth_server
+snapshot=/snapshot.jpg
+follow=/follow?enable=1&vx=0.10&vy=0&wz=0
+stop=/follow_stop
+depth=/depth_stats?x1=260&y1=120&x2=380&y2=300
+has_frame=1
+has_depth=0
+frame_age=0.035
+rs_available=0
+rs_error=ModuleNotFoundError("No module named 'pyrealsense2'",)

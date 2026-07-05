@@ -1,0 +1,7 @@
+[01m[K/home/unitree/legged_ws/build/qpoases_catkin/download/src/Matrices.cpp:[m[K In member function ‘[01m[Kvirtual qpOASES::returnValue qpOASES::SparseMatrix::getRowNorm(qpOASES::real_t*, qpOASES::int_t) const[m[K’:
+[01m[K/home/unitree/legged_ws/build/qpoases_catkin/download/src/Matrices.cpp:855:5:[m[K [01;35m[Kwarning: [m[Kthis ‘[01m[Kfor[m[K’ clause does not guard... [[01;35m[K-Wmisleading-indentation[m[K]
+     [01;35m[Kfor[m[K (i = jc[j]; i < jc[j+1]; i++);
+     [01;35m[K^~~[m[K
+[01m[K/home/unitree/legged_ws/build/qpoases_catkin/download/src/Matrices.cpp:856:7:[m[K [01;36m[Knote: [m[K...this statement, but the latter is misleadingly indented as if it were guarded by the ‘[01m[Kfor[m[K’
+       [01;36m[Knorm[m[K[ir[i]] += getAbs( val[i] );
+       [01;36m[K^~~~[m[K

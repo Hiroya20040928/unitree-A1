@@ -80,3 +80,15 @@ target_link_libraries(a1_low_ready_cycle ${EXTRA_LIBS})
 
 add_executable(a1_low_ready_wait_trigger examples/a1_low_ready_wait_trigger.cpp)
 target_link_libraries(a1_low_ready_wait_trigger ${EXTRA_LIBS})
+
+add_executable(a1_low_action_safety_fsm examples/a1_low_action_safety_fsm.cpp)
+target_link_libraries(a1_low_action_safety_fsm ${EXTRA_LIBS})
+
+add_executable(a1_high_follow_driver examples/a1_high_follow_driver.cpp)
+target_link_libraries(a1_high_follow_driver ${EXTRA_LIBS})
+
+add_executable(a1_high_follow_driver_v2 examples/a1_high_follow_driver_v2.cpp)
+target_link_libraries(a1_high_follow_driver_v2 ${EXTRA_LIBS})
+
+
+

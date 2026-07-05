@@ -1,0 +1,25 @@
+<launch>
+  <arg name="serial_no" default="044322070839" />
+  <arg name="depth_width" default="424" />
+  <arg name="depth_height" default="240" />
+  <arg name="depth_fps" default="15" />
+
+  <node pkg="slam_planner" type="base_controller_node" name="base_controller_node" output="screen" />
+
+  <node pkg="slam_planner" type="realsense_wander_obstacle_avoidance" name="realsense_wander_obstacle_avoidance" output="screen">
+    <param name="serial_no" value="$(arg serial_no)" type="str" />
+    <param name="depth_width" value="$(arg depth_width)" />
+    <param name="depth_height" value="$(arg depth_height)" />
+    <param name="depth_fps" value="$(arg depth_fps)" />
+    <param name="cmd_vel_topic" value="/cmd_vel" />
+    <param name="control_rate" value="10.0" />
+    <param name="linear_speed" value="0.10" />
+    <param name="angular_speed" value="0.50" />
+    <param name="escape_angular_speed" value="0.80" />
+    <param name="forward_clearance" value="0.40" />
+    <param name="side_clearance" value="0.32" />
+    <param name="emergency_clearance" value="0.30" />
+    <param name="min_valid_depth" value="0.18" />
+    <param name="max_valid_depth" value="3.50" />
+  </node>
+</launch>

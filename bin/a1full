@@ -1,0 +1,421 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-standing_trot}"
+
+WS="$HOME/legged_ws"
+LOGROOT="$HOME/a1run_logs"
+RUN_ID="$(date +%Y%m%d_%H%M%S)"
+LOGDIR="$LOGROOT/$RUN_ID"
+REF_ORIG="$WS/src/legged_control/legged_controllers/config/a1/reference.info"
+REF_RUNTIME="$WS/src/legged_control/legged_controllers/config/a1/reference_runtime_a1.info"
+
+mkdir -p "$LOGDIR"
+ln -sfn "$LOGDIR" "$LOGROOT/latest"
+
+PIDS=()
+
+echo "============================================================"
+echo "[A1FULL] FULL A1 STARTUP SEQUENCE"
+echo "============================================================"
+echo "[A1FULL] mode: $MODE"
+echo "[A1FULL] logs: $LOGDIR"
+echo ""
+echo "[A1FULL] This WILL start legged_unitree_hw."
+echo "[A1FULL] This WILL start legged_controller."
+echo "[A1FULL] This WILL command gait: $MODE"
+echo "============================================================"
+echo ""
+
+stop_all() {
+  set +e
+  echo ""
+  echo "[A1FULL] stopping controllers and nodes..."
+
+  source /opt/ros/melodic/setup.bash >/dev/null 2>&1 || true
+  source "$WS/devel/setup.bash" >/dev/null 2>&1 || true
+
+  export ROBOT_TYPE=a1
+  export ROS_MASTER_URI=http://127.0.0.1:11311
+  export ROS_IP=127.0.0.1
+  unset ROS_HOSTNAME
+
+  rosservice call /controller_manager/switch_controller "start_controllers: []
+stop_controllers:
+- 'controllers/legged_controller'
+strictness: 2
+start_asap: false
+timeout: 0.0" >/dev/null 2>&1 || true
+
+  for p in "${PIDS[@]}"; do
+    kill "$p" >/dev/null 2>&1 || true
+  done
+
+  pkill -f "legged_robot_gait_command" >/dev/null 2>&1 || true
+  pkill -f "legged_target_trajectories_publisher" >/dev/null 2>&1 || true
+  pkill -f "legged_unitree_hw" >/dev/null 2>&1 || true
+  pkill -f "legged_robot_target" >/dev/null 2>&1 || true
+  pkill -f "roslaunch.*legged_unitree_hw" >/dev/null 2>&1 || true
+  pkill -f "rostopic echo" >/dev/null 2>&1 || true
+
+  echo "[A1FULL] stopped."
+}
+
+on_interrupt() {
+  echo ""
+  echo "[A1FULL] interrupted."
+  stop_all
+  exit 130
+}
+
+on_error() {
+  local line="$1"
+  echo ""
+  echo "[A1FULL] ERROR at line $line."
+  stop_all
+  echo "[A1FULL] Check logs: $LOGDIR"
+  exit 1
+}
+
+trap 'on_interrupt' INT TERM
+trap 'on_error $LINENO' ERR
+
+start_bg() {
+  local name="$1"
+  shift
+
+  echo "[A1FULL] start: $name"
+  stdbuf -oL -eL "$@" >"$LOGDIR/$name.log" 2>&1 &
+  local pid=$!
+  PIDS+=("$pid")
+  echo "$pid" > "$LOGDIR/$name.pid"
+
+  sleep 1
+
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo "[A1FULL] ERROR: $name exited immediately."
+    echo "----- $name log -----"
+    cat "$LOGDIR/$name.log" || true
+    exit 1
+  fi
+}
+
+wait_service() {
+  local service="$1"
+  local limit="${2:-60}"
+
+  echo "[A1FULL] wait service: $service"
+
+  for i in $(seq 1 "$limit"); do
+    if rosservice list 2>/dev/null | grep -qx "$service"; then
+      echo "[A1FULL] service OK: $service"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[A1FULL] ERROR: service timeout: $service"
+  exit 1
+}
+
+wait_node() {
+  local node="$1"
+  local limit="${2:-60}"
+
+  echo "[A1FULL] wait node: $node"
+
+  for i in $(seq 1 "$limit"); do
+    if rosnode list 2>/dev/null | grep -qx "$node"; then
+      echo "[A1FULL] node OK: $node"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[A1FULL] ERROR: node timeout: $node"
+  exit 1
+}
+
+call_ok() {
+  local desc="$1"
+  shift
+
+  echo "[A1FULL] $desc"
+
+  set +e
+  local out
+  out="$("$@" 2>&1)"
+  local rc=$?
+  set -e
+
+  echo "$out"
+
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q "ok: True"; then
+    echo "[A1FULL] ERROR: failed: $desc"
+    exit 1
+  fi
+}
+
+publish_mode_stance() {
+  echo "[A1FULL] publish gait schedule: stance"
+  rostopic pub -1 /legged_robot_mpc_mode_schedule ocs2_msgs/mode_schedule "eventTimes: [0.0, 0.5]
+modeSequence: [15]" >/dev/null
+}
+
+publish_mode_standing_trot() {
+  echo "[A1FULL] publish gait schedule: standing_trot"
+  rostopic pub -1 /legged_robot_mpc_mode_schedule ocs2_msgs/mode_schedule "eventTimes: [0.0, 0.25, 0.3, 0.55, 0.6]
+modeSequence: [9, 15, 6, 15]" >/dev/null
+}
+
+publish_mode_standing_pace() {
+  echo "[A1FULL] publish gait schedule: standing_pace"
+  rostopic pub -1 /legged_robot_mpc_mode_schedule ocs2_msgs/mode_schedule "eventTimes: [0.0, 0.30, 0.35, 0.65, 0.70]
+modeSequence: [12, 15, 3, 15]" >/dev/null
+}
+
+make_runtime_reference() {
+  echo "[A1FULL] create runtime reference from current /joint_states..."
+
+  /usr/bin/python - "$REF_ORIG" "$REF_RUNTIME" <<'PY'
+import sys
+import re
+
+import rospy
+from sensor_msgs.msg import JointState
+
+orig_path = sys.argv[1]
+out_path = sys.argv[2]
+
+expected = [
+    "LF_HAA", "LF_HFE", "LF_KFE",
+    "LH_HAA", "LH_HFE", "LH_KFE",
+    "RF_HAA", "RF_HFE", "RF_KFE",
+    "RH_HAA", "RH_HFE", "RH_KFE",
+]
+
+rospy.init_node("a1_make_runtime_reference", anonymous=True, disable_signals=True)
+msg = rospy.wait_for_message("/joint_states", JointState, timeout=10.0)
+
+pos = dict(zip(msg.name, msg.position))
+missing = [n for n in expected if n not in pos]
+if missing:
+    raise SystemExit("missing joints in /joint_states: {}".format(missing))
+
+vals = [float(pos[n]) for n in expected]
+
+hfe = [vals[i] for i in [1, 4, 7, 10]]
+kfe = [vals[i] for i in [2, 5, 8, 11]]
+
+if not all(0.60 <= x <= 1.05 for x in hfe):
+    raise SystemExit("HFE posture out of safe standing range: {}".format(hfe))
+
+if not all(-2.05 <= x <= -1.20 for x in kfe):
+    raise SystemExit("KFE posture out of safe standing range: {}".format(kfe))
+
+with open(orig_path, "r") as f:
+    s = f.read()
+
+lines = [
+    "defaultJointState",
+    "{",
+]
+for i, pair in enumerate(zip(expected, vals)):
+    name, v = pair
+    lines.append("   ({},0)  {:+.6f}   ; {}".format(i, v, name))
+lines.append("}")
+new_block = "\n".join(lines)
+
+s = re.sub(r"comHeight\s+0\.3", "comHeight                           0.287", s)
+s = re.sub(r"defaultJointState\s*\{.*?\}", new_block, s, flags=re.S)
+
+with open(out_path, "w") as f:
+    f.write(s)
+
+print("[A1FULL] runtime reference written:")
+print(out_path)
+print("[A1FULL] defaultJointState:")
+for name, v in zip(expected, vals):
+    print("  {:6s} {:+.6f}".format(name, v))
+PY
+}
+
+check_observation() {
+  local label="$1"
+
+  echo "[A1FULL] observation check: $label"
+
+  /usr/bin/python <<'PY'
+import rospy
+import sys
+from ocs2_msgs.msg import mpc_observation
+
+rospy.init_node("a1_observation_check", anonymous=True, disable_signals=True)
+msg = rospy.wait_for_message("/legged_robot_mpc_observation", mpc_observation, timeout=10.0)
+
+state = list(msg.state.value)
+mode = int(msg.mode)
+z = float(state[8]) if len(state) > 8 else -1.0
+
+print("[A1FULL] observation time={:.3f} mode={} base_z={:.3f}".format(msg.time, mode, z))
+
+if z < 0.22:
+    print("[A1FULL] ERROR: base_z too low. robot may be collapsing.")
+    sys.exit(2)
+PY
+}
+
+monitor_loop() {
+  echo ""
+  echo "============================================================"
+  echo "[A1FULL] RUNNING"
+  echo "============================================================"
+  echo "[A1FULL] Current gait: $MODE"
+  echo "[A1FULL] Press Ctrl+C in this terminal to stop all ROS/A1 nodes."
+  echo "[A1FULL] Or run from another terminal: a1estop"
+  echo "============================================================"
+  echo ""
+
+  while true; do
+    set +e
+    /usr/bin/python <<'PY'
+import rospy
+from ocs2_msgs.msg import mpc_observation
+
+try:
+    rospy.init_node("a1_monitor_once", anonymous=True, disable_signals=True)
+    msg = rospy.wait_for_message("/legged_robot_mpc_observation", mpc_observation, timeout=3.0)
+    state = list(msg.state.value)
+    z = state[8] if len(state) > 8 else -1
+    print("[A1FULL] monitor: t={:.1f} mode={} base_z={:.3f}".format(msg.time, msg.mode, z))
+    if z < 0.22:
+        raise SystemExit(2)
+except SystemExit:
+    raise
+except Exception as e:
+    print("[A1FULL] monitor warning: {}".format(e))
+PY
+    rc=$?
+    set -e
+
+    if [ "$rc" -eq 2 ]; then
+      echo "[A1FULL] EMERGENCY: base_z too low. stopping."
+      stop_all
+      exit 2
+    fi
+
+    sleep 5
+  done
+}
+
+echo "[A1FULL] Step 0: a1prep"
+a1prep
+
+cd "$WS"
+source /opt/ros/melodic/setup.bash
+source devel/setup.bash
+
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+echo "[A1FULL] Step 1: start legged_unitree_hw"
+start_bg "legged_unitree_hw" roslaunch --screen legged_unitree_hw legged_unitree_hw.launch
+
+wait_service "/controller_manager/list_controllers" 60
+
+echo "[A1FULL] Step 2: load controller params"
+rosparam load "$(rospack find legged_controllers)/config/controllers.yaml"
+
+rosparam set /urdfFile /tmp/legged_control/a1.urdf
+rosparam set /taskFile "$(rospack find legged_controllers)/config/a1/task.info"
+rosparam set /gaitCommandFile "$(rospack find legged_controllers)/config/a1/gait.info"
+
+echo "[A1FULL] Step 3: joint_state_controller"
+call_ok "load joint_state_controller" \
+  rosservice call /controller_manager/load_controller "name: 'controllers/joint_state_controller'"
+
+call_ok "start joint_state_controller" \
+  rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/joint_state_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+sleep 2
+
+echo "[A1FULL] Step 4: verify /joint_states and /joy"
+rostopic echo -n 1 /joint_states | tee "$LOGDIR/initial_joint_states.txt"
+rostopic echo -n 1 /joy | tee "$LOGDIR/initial_joy.txt"
+
+echo "[A1FULL] Step 5: create runtime reference"
+make_runtime_reference
+rosparam set /referenceFile "$REF_RUNTIME"
+
+echo "[A1FULL] Step 6: start target publisher"
+start_bg "legged_robot_target" rosrun legged_controllers legged_target_trajectories_publisher
+wait_node "/legged_robot_target" 30
+
+echo "[A1FULL] Step 7: load legged_controller"
+set +e
+rosservice call /controller_manager/load_controller "name: 'controllers/legged_controller'" \
+  2>&1 | tee "$LOGDIR/load_legged_controller.log"
+rc=${PIPESTATUS[0]}
+set -e
+
+if [ "$rc" -ne 0 ] || ! grep -q "ok: True" "$LOGDIR/load_legged_controller.log"; then
+  echo "[A1FULL] ERROR: load legged_controller failed."
+  exit 1
+fi
+
+echo "[A1FULL] Step 8: publish stance before start"
+publish_mode_stance
+
+echo "[A1FULL] Step 9: start legged_controller"
+call_ok "start legged_controller" \
+  rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/legged_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+sleep 3
+
+echo "[A1FULL] Step 10: verify STANCE running"
+rosservice call /controller_manager/list_controllers | tee "$LOGDIR/controllers_after_start.txt"
+check_observation "stance-start"
+
+echo "[A1FULL] Step 11: settle in stance for 10 seconds"
+for i in $(seq 1 10); do
+  echo "[A1FULL] stance settle: ${i}/10"
+  sleep 1
+done
+check_observation "stance-settled"
+
+case "$MODE" in
+  stance|STANCE)
+    echo "[A1FULL] keeping STANCE."
+    publish_mode_stance
+    ;;
+  standing_trot|strot)
+    echo "[A1FULL] switching to standing_trot."
+    publish_mode_standing_trot
+    ;;
+  standing_pace|space)
+    echo "[A1FULL] switching to standing_pace."
+    publish_mode_standing_pace
+    ;;
+  *)
+    echo "[A1FULL] ERROR: unknown mode: $MODE"
+    echo "available: stance, standing_trot, standing_pace"
+    exit 1
+    ;;
+esac
+
+sleep 3
+check_observation "$MODE"
+
+monitor_loop

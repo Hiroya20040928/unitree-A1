@@ -1,0 +1,554 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-standing_trot}"
+LEVEL="${2:-0}"
+
+WS="$HOME/legged_ws"
+LOGROOT="$HOME/a1run_logs"
+RUN_ID="$(date +%Y%m%d_%H%M%S)"
+LOGDIR="$LOGROOT/$RUN_ID"
+
+REF_ORIG="$WS/src/legged_control/legged_controllers/config/a1/reference.info"
+REF_RUNTIME="$WS/src/legged_control/legged_controllers/config/a1/reference_runtime_a1.info"
+
+TASK_ORIG="$WS/src/legged_control/legged_controllers/config/a1/task.info"
+TASK_RUNTIME="$WS/src/legged_control/legged_controllers/config/a1/task_runtime_a1.info"
+
+mkdir -p "$LOGDIR"
+ln -sfn "$LOGDIR" "$LOGROOT/latest"
+
+PIDS=()
+
+echo "============================================================"
+echo "[A1FULL_REF] FULL A1 STARTUP BY REFERENCE-GAIT METHOD"
+echo "============================================================"
+echo "[A1FULL_REF] mode  : $MODE"
+echo "[A1FULL_REF] level : $LEVEL"
+echo "[A1FULL_REF] logs  : $LOGDIR"
+echo "============================================================"
+
+setup_ros_env() {
+  cd "$WS"
+  source /opt/ros/melodic/setup.bash
+  source devel/setup.bash
+
+  export ROBOT_TYPE=a1
+  export ROS_MASTER_URI=http://127.0.0.1:11311
+  export ROS_IP=127.0.0.1
+  unset ROS_HOSTNAME
+}
+
+hold_only() {
+  set +e
+  echo ""
+  echo "[A1FULL_REF] HOLD: stopping legged_controller only."
+
+  source /opt/ros/melodic/setup.bash >/dev/null 2>&1 || true
+  source "$WS/devel/setup.bash" >/dev/null 2>&1 || true
+
+  export ROBOT_TYPE=a1
+  export ROS_MASTER_URI=http://127.0.0.1:11311
+  export ROS_IP=127.0.0.1
+  unset ROS_HOSTNAME
+
+  rosservice call /controller_manager/switch_controller "start_controllers: []
+stop_controllers:
+- 'controllers/legged_controller'
+strictness: 2
+start_asap: false
+timeout: 0.0" >/dev/null 2>&1 || true
+
+  echo "[A1FULL_REF] legged_unitree_hw is intentionally left running."
+}
+
+kill_aux_only() {
+  set +e
+  for p in "${PIDS[@]:-}"; do
+    kill "$p" >/dev/null 2>&1 || true
+  done
+  pkill -f "legged_target_trajectories_publisher" >/dev/null 2>&1 || true
+  pkill -f "legged_robot_target" >/dev/null 2>&1 || true
+}
+
+on_interrupt() {
+  echo ""
+  echo "[A1FULL_REF] Ctrl+C received."
+  hold_only
+  kill_aux_only
+  exit 130
+}
+
+on_error() {
+  local line="$1"
+  echo ""
+  echo "[A1FULL_REF] ERROR at line $line."
+  hold_only
+  kill_aux_only
+  echo "[A1FULL_REF] logs: $LOGDIR"
+  exit 1
+}
+
+trap 'on_interrupt' INT TERM
+trap 'on_error $LINENO' ERR
+
+start_bg() {
+  local name="$1"
+  shift
+
+  echo "[A1FULL_REF] start: $name"
+  stdbuf -oL -eL "$@" >"$LOGDIR/$name.log" 2>&1 &
+  local pid=$!
+  PIDS+=("$pid")
+  echo "$pid" > "$LOGDIR/$name.pid"
+
+  sleep 1
+
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo "[A1FULL_REF] ERROR: $name exited immediately."
+    echo "----- $name log -----"
+    cat "$LOGDIR/$name.log" || true
+    exit 1
+  fi
+}
+
+wait_service() {
+  local service="$1"
+  local limit="${2:-60}"
+
+  echo "[A1FULL_REF] wait service: $service"
+
+  for i in $(seq 1 "$limit"); do
+    if rosservice list 2>/dev/null | grep -qx "$service"; then
+      echo "[A1FULL_REF] service OK: $service"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[A1FULL_REF] ERROR: service timeout: $service"
+  exit 1
+}
+
+wait_node() {
+  local node="$1"
+  local limit="${2:-60}"
+
+  echo "[A1FULL_REF] wait node: $node"
+
+  for i in $(seq 1 "$limit"); do
+    if rosnode list 2>/dev/null | grep -qx "$node"; then
+      echo "[A1FULL_REF] node OK: $node"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[A1FULL_REF] ERROR: node timeout: $node"
+  exit 1
+}
+
+call_ok() {
+  local desc="$1"
+  shift
+
+  echo "[A1FULL_REF] $desc"
+
+  set +e
+  local out
+  out="$("$@" 2>&1)"
+  local rc=$?
+  set -e
+
+  echo "$out"
+
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q "ok: True"; then
+    echo "[A1FULL_REF] ERROR: failed: $desc"
+    exit 1
+  fi
+}
+
+make_runtime_task() {
+  echo "[A1FULL_REF] create runtime task: level=$LEVEL"
+
+  /usr/bin/python - "$TASK_ORIG" "$TASK_RUNTIME" "$LEVEL" <<'PY'
+import sys
+import re
+
+src = sys.argv[1]
+dst = sys.argv[2]
+level = int(sys.argv[3])
+
+with open(src, "r") as f:
+    s = f.read()
+
+levels = {
+    0: (15.0, 1000.0, 300.0, 300.0, "1e-3", 0.30, 350, 37),
+    1: (25.0, 1500.0, 450.0, 450.0, "8e-4", 0.35, 350, 37),
+    2: (40.0, 2000.0, 600.0, 600.0, "5e-4", 0.40, 380, 40),
+    3: (60.0, 3000.0, 800.0, 800.0, "3e-4", 0.45, 420, 44),
+    4: (80.0, 4000.0, 1000.0, 1000.0, "2e-4", 0.50, 450, 48),
+}
+
+if level not in levels:
+    raise SystemExit("LEVEL must be 0..4")
+
+vcom_y, p_base_y, theta_y, theta_x, r_scaling, friction, swing_kp, swing_kd = levels[level]
+
+def sub_line(pattern, repl, text):
+    new, n = re.subn(pattern, repl, text)
+    if n == 0:
+        print("[WARN] pattern not found: " + pattern)
+    return new
+
+s = sub_line(r"\(1,1\)\s+[0-9.eE+-]+\s+; vcom_y",
+             "(1,1)   %.1f     ; vcom_y" % vcom_y, s)
+
+s = sub_line(r"\(7,7\)\s+[0-9.eE+-]+\s+; p_base_y",
+             "(7,7)   %.1f   ; p_base_y" % p_base_y, s)
+
+s = sub_line(r"\(10,10\)\s+[0-9.eE+-]+\s+; theta_base_y",
+             "(10,10) %.1f    ; theta_base_y" % theta_y, s)
+
+s = sub_line(r"\(11,11\)\s+[0-9.eE+-]+\s+; theta_base_x",
+             "(11,11) %.1f    ; theta_base_x" % theta_x, s)
+
+s = re.sub(r"R\s*\{\s*scaling\s+[0-9.eE+-]+",
+           "R\n{\n   scaling " + r_scaling, s, flags=re.S)
+
+s = re.sub(r"frictionCoefficient\s+[0-9.]+",
+           "frictionCoefficient    %.2f" % friction, s)
+
+s = re.sub(r"swingLegTask\s*\{\s*kp\s+[0-9.eE+-]+\s*kd\s+[0-9.eE+-]+\s*\}",
+           "swingLegTask\n{\n    kp                   %d\n    kd                   %d\n}" % (swing_kp, swing_kd),
+           s, flags=re.S)
+
+with open(dst, "w") as f:
+    f.write(s)
+
+print("[A1FULL_REF] task written: " + dst)
+print("[A1FULL_REF] level=%d vcom_y=%.1f p_base_y=%.1f theta_y=%.1f theta_x=%.1f R=%s friction=%.2f swing=(%d,%d)" %
+      (level, vcom_y, p_base_y, theta_y, theta_x, r_scaling, friction, swing_kp, swing_kd))
+PY
+}
+
+make_runtime_reference() {
+  echo "[A1FULL_REF] create runtime reference from current /joint_states and gait=$MODE"
+
+  /usr/bin/python - "$REF_ORIG" "$REF_RUNTIME" "$MODE" <<'PY'
+import sys
+import rospy
+from sensor_msgs.msg import JointState
+
+src = sys.argv[1]
+dst = sys.argv[2]
+mode = sys.argv[3]
+
+expected = [
+    "LF_HAA", "LF_HFE", "LF_KFE",
+    "LH_HAA", "LH_HFE", "LH_KFE",
+    "RF_HAA", "RF_HFE", "RF_KFE",
+    "RH_HAA", "RH_HFE", "RH_KFE",
+]
+
+gaits = {
+    "stance": {
+        "modes": ["STANCE"],
+        "times": [0.0, 1.0],
+    },
+    "standing_trot": {
+        "modes": ["LF_RH", "STANCE", "RF_LH", "STANCE"],
+        "times": [0.00, 0.25, 0.30, 0.55, 0.60],
+    },
+    "standing_pace": {
+        "modes": ["LF_LH", "STANCE", "RF_RH", "STANCE"],
+        "times": [0.00, 0.30, 0.35, 0.65, 0.70],
+    },
+}
+
+def replace_block(text, block_name, new_block):
+    idx = text.find(block_name)
+    if idx < 0:
+        raise SystemExit("block not found: " + block_name)
+
+    open_idx = text.find("{", idx)
+    if open_idx < 0:
+        raise SystemExit("opening brace not found: " + block_name)
+
+    depth = 0
+    end_idx = None
+
+    for i in range(open_idx, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end_idx = i + 1
+                break
+
+    if end_idx is None:
+        raise SystemExit("closing brace not found: " + block_name)
+
+    return text[:idx] + new_block + text[end_idx:]
+
+if mode not in gaits:
+    raise SystemExit("unknown mode: " + mode)
+
+rospy.init_node("a1_make_reference_gait", anonymous=True, disable_signals=True)
+msg = rospy.wait_for_message("/joint_states", JointState, timeout=10.0)
+
+pos = dict(zip(msg.name, msg.position))
+missing = [n for n in expected if n not in pos]
+if missing:
+    raise SystemExit("missing joints: %s" % missing)
+
+vals = [float(pos[n]) for n in expected]
+
+hfe = [vals[i] for i in [1, 4, 7, 10]]
+kfe = [vals[i] for i in [2, 5, 8, 11]]
+
+if not all(0.60 <= x <= 1.05 for x in hfe):
+    raise SystemExit("HFE out of standing range: %s" % hfe)
+if not all(-2.05 <= x <= -1.20 for x in kfe):
+    raise SystemExit("KFE out of standing range: %s" % kfe)
+
+with open(src, "r") as f:
+    s = f.read()
+
+s = s.replace("comHeight                           0.3", "comHeight                           0.287")
+s = s.replace("comHeight                           0.300", "comHeight                           0.287")
+s = s.replace("comHeight                           0.30", "comHeight                           0.287")
+
+lines = ["defaultJointState", "{"]
+for i, pair in enumerate(zip(expected, vals)):
+    name, v = pair
+    lines.append("   (%d,0)  %+0.6f   ; %s" % (i, v, name))
+lines.append("}")
+default_joint_block = "\n".join(lines)
+
+s = replace_block(s, "defaultJointState", default_joint_block)
+
+initial_block = """initialModeSchedule
+{
+  modeSequence
+  {
+    [0]  STANCE
+    [1]  STANCE
+  }
+  eventTimes
+  {
+    [0]  3.0
+  }
+}"""
+
+s = replace_block(s, "initialModeSchedule", initial_block)
+
+g = gaits[mode]
+
+mode_lines = ["defaultModeSequenceTemplate", "{", "  modeSequence", "  {"]
+for i, m in enumerate(g["modes"]):
+    mode_lines.append("    [%d]  %s" % (i, m))
+mode_lines += ["  }", "  switchingTimes", "  {"]
+for i, t in enumerate(g["times"]):
+    mode_lines.append("    [%d]  %.2f" % (i, t))
+mode_lines += ["  }", "}"]
+
+gait_block = "\n".join(mode_lines)
+s = replace_block(s, "defaultModeSequenceTemplate", gait_block)
+
+with open(dst, "w") as f:
+    f.write(s)
+
+print("[A1FULL_REF] reference written: " + dst)
+print("[A1FULL_REF] mode: " + mode)
+print("[A1FULL_REF] defaultJointState:")
+for name, v in zip(expected, vals):
+    print("  %-6s %+0.6f" % (name, v))
+PY
+}
+
+check_observation() {
+  local label="$1"
+
+  echo "[A1FULL_REF] observation check: $label"
+
+  /usr/bin/python <<'PY'
+import rospy
+import sys
+from ocs2_msgs.msg import mpc_observation
+
+rospy.init_node("a1_observation_check", anonymous=True, disable_signals=True)
+msg = rospy.wait_for_message("/legged_robot_mpc_observation", mpc_observation, timeout=10.0)
+
+state = list(msg.state.value)
+mode = int(msg.mode)
+z = float(state[8]) if len(state) > 8 else -1.0
+
+print("[A1FULL_REF] observation time=%.3f mode=%d base_z=%.3f" % (msg.time, mode, z))
+
+if z < 0.22:
+    print("[A1FULL_REF] ERROR: base_z too low.")
+    sys.exit(2)
+PY
+}
+
+verify_gait_if_needed() {
+  if [ "$MODE" = "stance" ]; then
+    return 0
+  fi
+
+  echo "[A1FULL_REF] verify actual gait transition..."
+
+  /usr/bin/python <<'PY'
+import time
+import rospy
+import sys
+from ocs2_msgs.msg import mpc_observation
+
+rospy.init_node("a1_verify_gait", anonymous=True, disable_signals=True)
+
+seen = []
+deadline = time.time() + 15.0
+
+while time.time() < deadline:
+    msg = rospy.wait_for_message("/legged_robot_mpc_observation", mpc_observation, timeout=2.0)
+    m = int(msg.mode)
+    seen.append(m)
+    print("[A1FULL_REF] observed mode: %d" % m)
+    if m != 15:
+        print("[A1FULL_REF] gait transition confirmed.")
+        sys.exit(0)
+
+print("[A1FULL_REF] ERROR: mode stayed STANCE. seen=%s" % seen)
+sys.exit(3)
+PY
+}
+
+monitor_loop() {
+  echo ""
+  echo "============================================================"
+  echo "[A1FULL_REF] RUNNING"
+  echo "============================================================"
+  echo "[A1FULL_REF] requested gait: $MODE"
+  echo "[A1FULL_REF] robust level  : $LEVEL"
+  echo "[A1FULL_REF] normal stop    : run a1hold from another terminal"
+  echo "[A1FULL_REF] full stop      : run a1estop only when supported"
+  echo "============================================================"
+  echo ""
+
+  while true; do
+    set +e
+    /usr/bin/python <<'PY'
+import rospy
+from ocs2_msgs.msg import mpc_observation
+
+try:
+    rospy.init_node("a1_monitor_once", anonymous=True, disable_signals=True)
+    msg = rospy.wait_for_message("/legged_robot_mpc_observation", mpc_observation, timeout=3.0)
+    state = list(msg.state.value)
+    z = state[8] if len(state) > 8 else -1
+    print("[A1FULL_REF] monitor: t=%.1f mode=%d base_z=%.3f" % (msg.time, msg.mode, z))
+    if z < 0.22:
+        raise SystemExit(2)
+except SystemExit:
+    raise
+except Exception as e:
+    print("[A1FULL_REF] monitor warning: %s" % e)
+PY
+    rc=$?
+    set -e
+
+    if [ "$rc" -eq 2 ]; then
+      echo "[A1FULL_REF] EMERGENCY: base_z too low. entering hold."
+      hold_only
+      kill_aux_only
+      exit 2
+    fi
+
+    sleep 5
+  done
+}
+
+echo "[A1FULL_REF] Step 0: a1prep"
+a1prep
+
+setup_ros_env
+
+echo "[A1FULL_REF] Preflight: check clean controller_manager"
+if rosservice list 2>/dev/null | grep -qx "/controller_manager/list_controllers"; then
+  echo "[A1FULL_REF] ERROR: existing controller_manager is already running."
+  echo "[A1FULL_REF] Do not run a1full_ref after a1hold."
+  echo "[A1FULL_REF] For a new run:"
+  echo "  1. physically support or power-cycle A1"
+  echo "  2. run: a1estop 2>/dev/null || a1clean"
+  echo "  3. return A1 to normal standing by remote"
+  echo "  4. run a1full_ref again"
+  exit 10
+fi
+
+echo "[A1FULL_REF] Step 1: start legged_unitree_hw"
+start_bg "legged_unitree_hw" roslaunch --screen legged_unitree_hw legged_unitree_hw.launch
+wait_service "/controller_manager/list_controllers" 60
+
+echo "[A1FULL_REF] Step 2: load controller params"
+rosparam load "$(rospack find legged_controllers)/config/controllers.yaml"
+rosparam set /urdfFile /tmp/legged_control/a1.urdf
+rosparam set /gaitCommandFile "$(rospack find legged_controllers)/config/a1/gait.info"
+
+make_runtime_task
+rosparam set /taskFile "$TASK_RUNTIME"
+
+echo "[A1FULL_REF] Step 3: joint_state_controller"
+call_ok "load joint_state_controller" \
+  rosservice call /controller_manager/load_controller "name: 'controllers/joint_state_controller'"
+
+call_ok "start joint_state_controller" \
+  rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/joint_state_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+sleep 2
+
+echo "[A1FULL_REF] Step 4: verify /joint_states and /joy"
+rostopic echo -n 1 /joint_states | tee "$LOGDIR/initial_joint_states.txt"
+rostopic echo -n 1 /joy | tee "$LOGDIR/initial_joy.txt"
+
+echo "[A1FULL_REF] Step 5: create runtime reference with embedded gait"
+make_runtime_reference
+rosparam set /referenceFile "$REF_RUNTIME"
+
+echo "[A1FULL_REF] Step 6: start target publisher"
+start_bg "legged_robot_target" rosrun legged_controllers legged_target_trajectories_publisher
+wait_node "/legged_robot_target" 30
+
+echo "[A1FULL_REF] Step 7: load legged_controller"
+set +e
+rosservice call /controller_manager/load_controller "name: 'controllers/legged_controller'" \
+  2>&1 | tee "$LOGDIR/load_legged_controller.log"
+rc=${PIPESTATUS[0]}
+set -e
+
+if [ "$rc" -ne 0 ] || ! grep -q "ok: True" "$LOGDIR/load_legged_controller.log"; then
+  echo "[A1FULL_REF] ERROR: load legged_controller failed."
+  exit 1
+fi
+
+echo "[A1FULL_REF] Step 8: start legged_controller"
+call_ok "start legged_controller" \
+  rosservice call /controller_manager/switch_controller "start_controllers:
+- 'controllers/legged_controller'
+stop_controllers: []
+strictness: 2
+start_asap: false
+timeout: 0.0"
+
+sleep 3
+check_observation "controller-start"
+
+verify_gait_if_needed
+
+monitor_loop

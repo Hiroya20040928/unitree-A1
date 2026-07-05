@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set +e
+
+A1_WS="$HOME/legged_ws"
+
+PC_GW=""
+if [ -n "${SSH_CLIENT:-}" ]; then
+  PC_GW="$(echo "$SSH_CLIENT" | awk '{print $1}')"
+fi
+
+echo "============================================================"
+echo "[A1PREP] ENVIRONMENT PREPARATION ONLY"
+echo "============================================================"
+echo "[A1PREP] This does NOT start roslaunch."
+echo "[A1PREP] This does NOT load/start controllers."
+echo "[A1PREP] This does NOT send stance."
+echo ""
+
+echo "[1/5] Network preparation via Ubuntu PC gateway"
+if echo "$PC_GW" | grep -q "^192\.168\.12\."; then
+  echo "[A1PREP] Detected Ubuntu PC gateway from SSH_CLIENT: $PC_GW"
+  sudo /usr/local/sbin/a1-netfix "$PC_GW"
+else
+  echo "[A1PREP] Could not detect 192.168.12.x SSH client."
+  echo "[A1PREP] SSH_CLIENT=${SSH_CLIENT:-empty}"
+  sudo /usr/local/sbin/a1-netfix
+fi
+
+echo ""
+echo "[2/5] ROS environment"
+source /opt/ros/melodic/setup.bash
+source "$A1_WS/devel/setup.bash"
+
+export ROBOT_TYPE=a1
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_IP=127.0.0.1
+unset ROS_HOSTNAME
+
+echo "ROBOT_TYPE=$ROBOT_TYPE"
+echo "ROS_MASTER_URI=$ROS_MASTER_URI"
+echo "ROS_IP=$ROS_IP"
+echo "ROS_HOSTNAME=${ROS_HOSTNAME:-}"
+
+echo ""
+echo "[3/5] Workspace check"
+if [ -d "$A1_WS" ]; then
+  echo "[OK] $A1_WS"
+else
+  echo "[NG] workspace not found: $A1_WS"
+fi
+
+if [ -f "$A1_WS/devel/setup.bash" ]; then
+  echo "[OK] devel/setup.bash"
+else
+  echo "[NG] devel/setup.bash missing"
+fi
+
+echo ""
+echo "[4/5] ROS package check"
+rospack find legged_unitree_hw >/dev/null 2>&1 && echo "[OK] legged_unitree_hw: $(rospack find legged_unitree_hw)" || echo "[NG] legged_unitree_hw"
+rospack find legged_controllers >/dev/null 2>&1 && echo "[OK] legged_controllers: $(rospack find legged_controllers)" || echo "[NG] legged_controllers"
+rospack find ocs2_legged_robot_ros >/dev/null 2>&1 && echo "[OK] ocs2_legged_robot_ros: $(rospack find ocs2_legged_robot_ros)" || echo "[NG] ocs2_legged_robot_ros"
+
+echo ""
+echo "[5/5] Executable check"
+for f in \
+  "$A1_WS/devel/lib/legged_controllers/legged_target_trajectories_publisher" \
+  "$A1_WS/devel/lib/ocs2_legged_robot_ros/legged_robot_gait_command"
+do
+  [ -x "$f" ] && echo "[OK] $f" || echo "[NG] $f"
+done
+
+echo ""
+echo "============================================================"
+echo "[A1PREP] READY"
+echo "============================================================"
+echo "Nothing has been launched."
+echo "Use manual ROS commands when you actually want to run A1."
